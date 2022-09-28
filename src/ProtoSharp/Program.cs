@@ -1,5 +1,7 @@
 ﻿#region
 
+using System.Diagnostics;
+
 using ProtoParser.Parsing;
 
 #endregion
@@ -19,5 +21,10 @@ if ( !File.Exists( path ) )
 
 Console.WriteLine( $"Parsing '{path}'" );
 
-using StreamReader reader = new( path );
-Parser.Parse( reader );
+Stopwatch watch = Stopwatch.StartNew( );
+Parser.Parse(
+    File.ReadAllBytes( path ),
+    path );
+watch.Stop( );
+
+Console.WriteLine( $"Parsing took {watch.ElapsedMilliseconds} ms" );
