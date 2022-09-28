@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProtoParser", "src\ProtoParser\ProtoParser.csproj", "{BFEB765C-3C8F-4DBD-975E-A4D716065275}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProtoSharp", "src\ProtoSharp\ProtoSharp.csproj", "{2FE2B3A2-738D-4E64-8ABE-0C70CEFAA880}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BFEB765C-3C8F-4DBD-975E-A4D716065275}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BFEB765C-3C8F-4DBD-975E-A4D716065275}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BFEB765C-3C8F-4DBD-975E-A4D716065275}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BFEB765C-3C8F-4DBD-975E-A4D716065275}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2FE2B3A2-738D-4E64-8ABE-0C70CEFAA880}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2FE2B3A2-738D-4E64-8ABE-0C70CEFAA880}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2FE2B3A2-738D-4E64-8ABE-0C70CEFAA880}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2FE2B3A2-738D-4E64-8ABE-0C70CEFAA880}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9BD09F0E-7F66-41FC-B011-E14B21F75F2E}
+	EndGlobalSection
+EndGlobal
