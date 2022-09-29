@@ -1,8 +1,15 @@
 ﻿namespace ProtoParser.Parsing.Tokens;
 
-internal class KeywordToken : Token
+internal class IdentifierToken : Token
 {
     internal override required ETokenKind TokenKind { get; init; }
+
+    internal required string Identifier { get; init; }
+
+    public override string ToString( )
+    {
+        return $"Token({TokenKind}, {Identifier})";
+    }
 }
 
 internal readonly ref struct Keywords

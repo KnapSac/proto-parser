@@ -11,291 +11,270 @@ namespace ProtoParser.Parsing;
 
 internal class Lexer
 {
-    private static ReadOnlySpan< byte > ByteOrderMark => new(
-        new[ ]
-        {
-            (byte) '\xEF',
-            (byte) '\xBB',
-            (byte) '\xBF',
-        },
-        0,
-        3 );
+    private static ReadOnlySpan< byte > ByteOrderMark => "\xEF\xBB\xBF"u8;
 
     private readonly byte[ ] m_Buffer;
+    private readonly IList< Token > m_TokenBuffer;
     private readonly IDiagnosticsProvider m_DiagnosticsProvider;
 
+    /// The position of the last read byte, or `-1` if no bytes have been read yet.
     private int m_Position;
+
+    /// `true` if the lexer has seen the end of the file.
+    private bool m_EndOfFile;
+
     private int m_Line;
-    private int m_LineStartPosition;
+    private int m_LastLineWithToken;
 
     internal Lexer(
         byte[ ] buffer,
         IDiagnosticsProvider diagnosticsProvider )
     {
         m_Buffer = buffer;
+        // TODO: Be smarter about the initial token buffer size.
+        m_TokenBuffer = new List< Token >( 512 );
         m_DiagnosticsProvider = diagnosticsProvider;
 
         m_Position = -1;
         m_Line = 1;
-        m_LineStartPosition = 0;
+        m_LastLineWithToken = 0;
     }
 
-    internal Token Eat(
-        ETokenKind tokenKind )
+    internal IList< Token > Lex( )
     {
-        EatWhitespace( );
-
-        switch ( tokenKind )
+        // Consume the byte order mark if it is present.
+        if ( Peek(
+                 ByteOrderMark.Length,
+                 out ReadOnlySpan< byte > maybeByteOrderMark )
+             && maybeByteOrderMark.SequenceEqual( ByteOrderMark ) )
         {
-            case ETokenKind.Equals:
-            {
-                if ( Peek( ) != (byte) '=' )
-                {
-                    return new MissingToken
-                           {
-                               TokenKind = ETokenKind.Missing,
-                               MissingTokenKind = ETokenKind.Equals,
-                           };
-                }
-
-                EatByte( );
-                return new SymbolToken
-                       {
-                           TokenKind = ETokenKind.Equals,
-                       };
-            }
-            case ETokenKind.Semicolon:
-            {
-                if ( Peek( ) != (byte) ';' )
-                {
-                    return new MissingToken
-                           {
-                               TokenKind = ETokenKind.Missing,
-                               MissingTokenKind = ETokenKind.Semicolon,
-                           };
-                }
-
-                EatByte( );
-                return new SymbolToken
-                       {
-                           TokenKind = ETokenKind.Semicolon,
-                       };
-            }
-            default:
-                throw new ArgumentOutOfRangeException(
-                    nameof( tokenKind ),
-                    tokenKind,
-                    "Unexpected token" );
+            Discard( ByteOrderMark.Length );
         }
-    }
 
-    internal Token ? EatOptional(
-        ETokenKind tokenKind )
-    {
-        switch ( tokenKind )
+        while ( !m_EndOfFile )
         {
-            case ETokenKind.ByteOrderMark:
+            switch ( EatByte( ) )
             {
-                if ( Peek( ) == ByteOrderMark[ 0 ]
-                     && Peek( 2 ) == ByteOrderMark[ 1 ]
-                     && Peek( 3 ) == ByteOrderMark[ 2 ] )
+                case (byte) '\n':
                 {
-                    EatBytes( ByteOrderMark.Length );
-                    return new SymbolToken
-                           {
-                               TokenKind = ETokenKind.ByteOrderMark,
-                           };
-                }
-
-                return null;
-            }
-            case ETokenKind.Syntax:
-                // TODO: There is probably a better way to do this.
-                int idx = 0;
-                foreach ( byte b in Keywords.Syntax )
-                {
-                    if ( Peek( ++idx ) != b )
-                    {
-                        return new MissingToken
-                               {
-                                   TokenKind = ETokenKind.Missing,
-                                   MissingTokenKind = ETokenKind.Syntax,
-                               };
-                    }
-                }
-
-                EatBytes( Keywords.Syntax.Length );
-                return new KeywordToken
-                       {
-                           TokenKind = ETokenKind.Syntax,
-                       };
-            default:
-                throw new ArgumentOutOfRangeException(
-                    nameof( tokenKind ),
-                    tokenKind,
-                    "Unexpected token" );
-        }
-    }
-
-    internal Token EatStringLiteral( )
-    {
-        // PERF: There is room for improvement here, relying on strings is probably not the smartest
-        // idea. Concatenation is possible, but probably won't happen too often.
-        string literalValue = string.Empty;
-        int literalValueStartPosition = 0;
-        while ( true )
-        {
-            EatWhitespace( );
-
-            byte ? peeked = Peek( );
-            if ( peeked is not ((byte) '\"' or (byte) '\'') )
-            {
-                return string.IsNullOrEmpty( literalValue )
-                    ? new MissingToken
-                      {
-                          TokenKind = ETokenKind.Missing,
-                          MissingTokenKind = ETokenKind.StringLiteral,
-                      }
-                    : new StringLiteralToken
-                      {
-                          TokenKind = ETokenKind.StringLiteral,
-                          Value = literalValue,
-                          Line = m_Line,
-                          Column = literalValueStartPosition - m_LineStartPosition - 1,
-                      };
-            }
-
-            EatByte( );
-
-            // We don't want to include the delimiter in the literal value, so we need to skip an
-            // additional position.
-            int startPosition = m_Position + 1;
-
-            byte readUntil = peeked.Value;
-            while ( true )
-            {
-                if ( Peek( ) == readUntil
-                     && m_Buffer[ m_Position ] != (byte) '\\' )
-                {
-                    EatByte( );
+                    // We have encountered a newline, so we need to update our state.
+                    EatNewline( );
                     break;
                 }
-
-                EatByte( );
+                case (byte) '/':
+                {
+                    // Line or block comment.
+                    switch ( EatByte( ) )
+                    {
+                        case (byte) '/':
+                        {
+                            // Line comment.
+                            EatLineComment( );
+                            break;
+                        }
+                        case (byte) '*':
+                        {
+                            // Block comment.
+                            EatBlockComment( );
+                            break;
+                        }
+                        default:
+                            throw new ArgumentException( $"Unexpected byte '{(char) Current( )}'" );
+                    }
+                    break;
+                }
+                case { } b when b == (byte) '_' || char.IsAsciiLetter( (char) b ):
+                {
+                    // Identifier.
+                    EatIdentifier( );
+                    break;
+                }
+                case (byte) '"' or (byte) '\'':
+                {
+                    // String literal.
+                    EatStringLiteral( );
+                    break;
+                }
+                case (byte) ' ' or (byte) '\r' or (byte) '\t' or (byte) '\f' or (byte) '\v':
+                {
+                    // Whitespace.
+                    break;
+                }
+                case (byte) '=':
+                {
+                    // Equals.
+                    EmitToken(
+                        new SymbolToken
+                        {
+                            TokenKind = ETokenKind.Equals,
+                        } );
+                    break;
+                }
+                case (byte) ';':
+                {
+                    // Semicolon.
+                    EmitToken(
+                        new SymbolToken
+                        {
+                            TokenKind = ETokenKind.Semicolon,
+                        } );
+                    break;
+                }
+                case null:
+                {
+                    // End of file.
+                    EatEndOfFile( );
+                    break;
+                }
+                default:
+                    throw new ArgumentException( $"Unexpected byte '{(char) Current( )}'" );
             }
-
-            if ( string.IsNullOrEmpty( literalValue ) )
-            {
-                literalValueStartPosition = startPosition;
-            }
-
-            literalValue += Encoding.UTF8.GetString(
-                m_Buffer,
-                startPosition,
-                m_Position - startPosition );
         }
+
+        return m_TokenBuffer;
     }
 
-    /// Consumes line and block comments, with any whitespace before and after it. Also consumes the
-    /// newline after a line comment!
-    internal void EatComments( )
+    private void EatIdentifier( )
     {
-        // We need to handle comments separated by empty lines, so continue to parse until we can
-        // find no more comments.
+        int startPosition = m_Position;
         while ( true )
         {
-            // Consume any whitespace which occurs before the comment.
-            EatWhitespace( );
-
-            byte ? peeked = Peek( );
-            if ( peeked is not (byte) '/' )
+            byte ? current = EatByte( );
+            if ( current is null )
             {
-                // Either we have reached the end of the file, or there is no comment here.
+                EatEndOfFile( );
                 return;
             }
 
-            // Consume the peeked byte, and peek another one.
-            EatByte( );
-            peeked = Peek( );
-
-            // Abort if we have found a malformed comment.
-            if ( peeked is not ((byte) '/' or (byte) '*') )
+            if ( current == (byte) '_'
+                 || char.IsAsciiLetter( (char) current )
+                 || char.IsAsciiDigit( (char) current ) )
             {
-                m_DiagnosticsProvider.EmitError(
-                    "Comments should start with '//' or '/*'",
-                    m_Line,
-                    m_Position - m_LineStartPosition );
-                return;
+                // Valid identifier character, continue.
+                continue;
             }
 
-            // Consume the second byte of the comment indicator.
-            EatByte( );
+            // We have reached the end of the identifier.
+            EmitToken(
+                new IdentifierToken
+                {
+                    TokenKind = ETokenKind.Identifier,
+                    Identifier = Encoding.UTF8.GetString(
+                        m_Buffer,
+                        startPosition,
+                        m_Position - startPosition ),
+                } );
 
-            // Parse the appropriate comment type.
-            if ( peeked == '/' )
-            {
-                EatLineComment( );
-            }
-            else
-            {
-                EatBlockComment( );
-            }
-
-            // Consume any whitespace which occurs after the comment.
-            EatWhitespace( );
-        }
-    }
-
-    /// Consumes all available whitespace. Will also consume newlines!
-    private void EatWhitespace( )
-    {
-        while ( true )
-        {
-            switch ( Peek( ) )
+            switch ( current )
             {
                 case (byte) ' ':
-                case (byte) '\r':
-                case (byte) '\t':
-                case (byte) '\f':
-                case (byte) '\v':
-                    EatByte( );
-                    continue;
-                case (byte) '\n':
-                    EatNewline( );
-                    continue;
+                    break;
+                case (byte) '=':
+                    EmitToken(
+                        new SymbolToken
+                        {
+                            TokenKind = ETokenKind.Equals
+                        } );
+                    break;
+                case (byte) ';':
+                    EmitToken(
+                        new SymbolToken
+                        {
+                            TokenKind = ETokenKind.Semicolon
+                        } );
+                    break;
                 default:
-                    // No more whitespace to consume, so we're finished.
-                    return;
+                    throw new ArgumentException( $"Unexpected byte '{(char) Current( )}'" );
+            }
+
+            return;
+        }
+    }
+
+    private void EatStringLiteral( )
+    {
+        byte readUntil = Current( );
+        int startPosition = m_Position + 1;
+
+        while ( true )
+        {
+            byte ? current = EatByte( );
+            if ( current is null )
+            {
+                EatEndOfFile( );
+                return;
+            }
+
+            if ( (current == readUntil || current == readUntil)
+                 && Previous( ) != (byte) '\\' )
+            {
+                EmitToken(
+                    new StringLiteralToken
+                    {
+                        TokenKind = ETokenKind.StringLiteral,
+                        Value = Encoding.UTF8.GetString(
+                            m_Buffer,
+                            startPosition,
+                            m_Position - startPosition ),
+                    } );
+                return;
+            }
+
+            switch ( current )
+            {
+                case (byte) '\0':
+                    EmitToken(
+                        new InvalidToken
+                        {
+                            TokenKind = ETokenKind.NullCharacter,
+                        } );
+                    break;
+                case (byte) '\n' when Previous( ) != (byte) '\\':
+                    EmitToken(
+                        new MissingToken
+                        {
+                            TokenKind = ETokenKind.Missing,
+                            MissingTokenKind = ETokenKind.Quote,
+                        } );
+                    break;
             }
         }
     }
 
-    /// Consumes a line comment without consuming any whitespace before or after it.
+    /// Consumes a line comment without consuming any whitespace before or after it. The newline
+    /// after the comment is consumed.
     private void EatLineComment( )
     {
         // PRE: The leading slashes have been consumed.
         while ( true )
         {
-            switch ( Peek( ) )
+            switch ( EatByte( ) )
             {
                 case (byte) '\x00':
-                    m_DiagnosticsProvider.EmitError(
-                        "Comments are not allowed to contain the null character",
-                        m_Line,
-                        m_Position - m_LineStartPosition );
+                {
+                    EmitToken(
+                        new InvalidToken
+                        {
+                            TokenKind = ETokenKind.NullCharacter,
+                        } );
 
                     // Although null characters aren't allowed in comments, we continue consuming
                     // characters until we reach the end of the line, to ensure we can parse the
                     // rest of the file.
-                    EatByte( );
-                    continue;
-                case (byte) '\n':
-                    // We have reached the end of the line, consuming the newline is the
-                    // responsibility of the caller.
+                    break;
+                }
+                case null:
+                {
+                    // We have reached the end of the file, so we're done here.
+                    EatEndOfFile( );
                     return;
-                default:
-                    EatByte( );
-                    continue;
+                }
+                case (byte) '\n':
+                {
+                    // We have consumed a newline, so update our position before returning.
+                    UpdatePositionAfterNewline( );
+                    return;
+                }
             }
         }
     }
@@ -305,33 +284,90 @@ internal class Lexer
         throw new NotImplementedException( );
     }
 
-    /// Consumes a newline and updates the relevant state.
+    private void EatEndOfFile( )
+    {
+        EmitToken(
+            new SymbolToken
+            {
+                TokenKind = ETokenKind.EndOfFile,
+            } );
+        m_EndOfFile = true;
+    }
+
+    private byte ? EatByte( )
+    {
+        return m_Position + 1 == m_Buffer.Length
+            ? null
+            : m_Buffer[ ++m_Position ];
+    }
+
+    /// Returns the last read byte. The caller is responsible for ensuring that `m_Position` is in
+    /// bounds.
+    private byte Current( )
+    {
+        return m_Buffer[ m_Position ];
+    }
+
+    private byte ? Previous( )
+    {
+        return m_Position <= 0
+            ? null
+            : m_Buffer[ m_Position - 1 ];
+    }
+
+    private void EmitToken(
+        Token tokenToEmit )
+    {
+        m_TokenBuffer.Add( tokenToEmit );
+        m_LastLineWithToken = m_Line;
+    }
+
+    /// Consumes a newline.
     private void EatNewline( )
     {
-        // Consume the newline.
-        EatByte( );
+        if ( m_LastLineWithToken == m_Line )
+        {
+            EmitToken(
+                new SymbolToken
+                {
+                    TokenKind = ETokenKind.EndOfLine,
+                } );
+        }
 
+        UpdatePositionAfterNewline( );
+    }
+
+    /// Updates the relevant state after consuming a newline.
+    private void UpdatePositionAfterNewline( )
+    {
         // Update the line index and the starting position of the line.
         ++m_Line;
-        m_LineStartPosition = m_Position;
     }
 
-    private void EatByte( )
+    /// Peeks `bytesToPeek` ahead. If the return value is `true`, `bytes` contains the next
+    /// `bytesToPeek` bytes. If the return value is `false`, `bytes` is empty because there are not
+    /// enough bytes left to peek.
+    private bool Peek(
+        int bytesToPeek,
+        out ReadOnlySpan< byte > bytes )
     {
-        ++m_Position;
+        if ( m_Position + bytesToPeek >= m_Buffer.Length )
+        {
+            bytes = ReadOnlySpan< byte >.Empty;
+            return false;
+        }
+
+        bytes = m_Buffer.AsSpan(
+            m_Position + 1,
+            bytesToPeek );
+        return true;
     }
 
-    private void EatBytes(
-        int count )
+    /// Discards `bytesToDiscard` bytes by advancing the position by that count. The caller is
+    /// responsible for ensuring that there are enough bytes left to discard.
+    private void Discard(
+        int bytesToDiscard )
     {
-        m_Position += count;
-    }
-
-    private byte ? Peek(
-        int lookAhead = 1 )
-    {
-        return m_Position + lookAhead >= m_Buffer.Length
-            ? null
-            : m_Buffer[ m_Position + lookAhead ];
+        m_Position += bytesToDiscard;
     }
 }

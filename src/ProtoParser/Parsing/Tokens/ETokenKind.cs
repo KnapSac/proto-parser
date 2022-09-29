@@ -6,7 +6,10 @@ internal enum ETokenKind
     // Special tokens
     Missing,
     EndOfFile,
-    ByteOrderMark,
+    EndOfLine,
+    NullCharacter,
+
+    Identifier,
 
     // Keywords
     Syntax,
@@ -17,4 +20,5 @@ internal enum ETokenKind
     // Punctuation
     Equals,
     Semicolon,
+    Quote,
 }

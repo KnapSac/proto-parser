@@ -8,4 +8,9 @@ internal abstract class Token
 
     internal int Line { get; init; }
     internal int Column { get; init; }
+
+    public override string ToString( )
+    {
+        return $"Token({TokenKind})";
+    }
 }

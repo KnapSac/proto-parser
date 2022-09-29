@@ -37,43 +37,9 @@ public class Parser
 
     private void Parse( )
     {
-        m_Lexer.EatOptional( ETokenKind.ByteOrderMark );
-
-        m_Lexer.EatComments( );
-
-        ParseSyntaxDeclaration( );
-
-        throw new NotImplementedException( );
-    }
-
-    private void ParseSyntaxDeclaration( )
-    {
-        if ( m_Lexer.EatOptional( ETokenKind.Syntax ) is null )
+        foreach ( Token token in m_Lexer.Lex( ) )
         {
-            return;
+            Console.WriteLine( token );
         }
-
-        m_DiagnosticsProvider.EmitDiagnosticIfMissingToken( m_Lexer.Eat( ETokenKind.Equals ) );
-
-        StringLiteralToken ? syntaxLevelToken = ParseStringLiteral( );
-        if ( syntaxLevelToken is not null )
-        {
-            m_SourceFileNode.Syntax = new SyntaxNode
-                                      {
-                                          Value = syntaxLevelToken.Value
-                                      };
-        }
-
-        m_DiagnosticsProvider.EmitDiagnosticIfMissingToken( m_Lexer.Eat( ETokenKind.Semicolon ) );
-
-        m_Lexer.EatComments( );
-    }
-
-    private StringLiteralToken ? ParseStringLiteral( )
-    {
-        Token stringLiteralToken = m_Lexer.EatStringLiteral( );
-        return m_DiagnosticsProvider.EmitDiagnosticIfMissingToken( stringLiteralToken )
-            ? null
-            : (StringLiteralToken) stringLiteralToken;
     }
 }
