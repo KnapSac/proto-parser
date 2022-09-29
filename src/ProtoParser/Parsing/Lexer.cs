@@ -55,12 +55,20 @@ internal class Lexer
         {
             switch ( EatByte( ) )
             {
+                // Whitespace.
                 case (byte) '\n':
                 {
                     // We have encountered a newline, so we need to update our state.
                     EatNewline( );
                     break;
                 }
+                case (byte) ' ' or (byte) '\r' or (byte) '\t' or (byte) '\f' or (byte) '\v':
+                {
+                    // Whitespace.
+                    break;
+                }
+
+                // Comments.
                 case (byte) '/':
                 {
                     // Line or block comment.
@@ -83,23 +91,30 @@ internal class Lexer
                     }
                     break;
                 }
+
+                // Identifiers.
                 case { } b when b == (byte) '_' || char.IsAsciiLetter( (char) b ):
                 {
                     // Identifier.
                     EatIdentifier( );
                     break;
                 }
+
+                // Literals.
                 case (byte) '"' or (byte) '\'':
                 {
                     // String literal.
                     EatStringLiteral( );
                     break;
                 }
-                case (byte) ' ' or (byte) '\r' or (byte) '\t' or (byte) '\f' or (byte) '\v':
+                case { } b when char.IsAsciiDigit( (char) b ):
                 {
-                    // Whitespace.
+                    // Int or float literal.
+                    EatNumericLiteral( );
                     break;
                 }
+
+                // Punctuation.
                 case (byte) '=':
                 {
                     // Equals.
@@ -120,6 +135,47 @@ internal class Lexer
                         } );
                     break;
                 }
+                case (byte) '{':
+                {
+                    // Right brace.
+                    EmitToken(
+                        new SymbolToken
+                        {
+                            TokenKind = ETokenKind.RightBrace,
+                        } );
+                    break;
+                }
+                case (byte) '}':
+                {
+                    // Left brace.
+                    EmitToken(
+                        new SymbolToken
+                        {
+                            TokenKind = ETokenKind.LeftBrace,
+                        } );
+                    break;
+                }
+                case (byte) '(':
+                {
+                    // Right parenthesis.
+                    EmitToken(
+                        new SymbolToken
+                        {
+                            TokenKind = ETokenKind.RightParen,
+                        } );
+                    break;
+                }
+                case (byte) ')':
+                {
+                    // Left parenthesis.
+                    EmitToken(
+                        new SymbolToken
+                        {
+                            TokenKind = ETokenKind.LeftParen,
+                        } );
+                    break;
+                }
+
                 case null:
                 {
                     // End of file.
@@ -165,28 +221,7 @@ internal class Lexer
                         m_Position - startPosition ),
                 } );
 
-            switch ( current )
-            {
-                case (byte) ' ':
-                    break;
-                case (byte) '=':
-                    EmitToken(
-                        new SymbolToken
-                        {
-                            TokenKind = ETokenKind.Equals
-                        } );
-                    break;
-                case (byte) ';':
-                    EmitToken(
-                        new SymbolToken
-                        {
-                            TokenKind = ETokenKind.Semicolon
-                        } );
-                    break;
-                default:
-                    throw new ArgumentException( $"Unexpected byte '{(char) Current( )}'" );
-            }
-
+            UneatByte( );
             return;
         }
     }
@@ -237,6 +272,52 @@ internal class Lexer
                             MissingTokenKind = ETokenKind.Quote,
                         } );
                     break;
+            }
+        }
+    }
+
+    private void EatNumericLiteral( )
+    {
+        int startPosition = m_Position;
+        while ( true )
+        {
+            switch ( EatByte( ) )
+            {
+                case { } b when char.IsAsciiDigit( (char) b ):
+                    break;
+                case (byte) '.':
+                    break;
+                case (byte) 'e':
+                case (byte) 'E':
+                {
+                    // Scientific notation.
+                    switch ( EatByte( ) )
+                    {
+                        case (byte) '+':
+                        case (byte) '-':
+                            break;
+                        default:
+                            EmitToken(
+                                new InvalidToken
+                                {
+                                    TokenKind = ETokenKind.FloatLiteral,
+                                } );
+                            return;
+                    }
+                    break;
+                }
+                default:
+                    // TODO: Emit proper numeric token.
+                    EmitToken(
+                        new StringLiteralToken
+                        {
+                            TokenKind = ETokenKind.StringLiteral,
+                            Value = Encoding.UTF8.GetString(
+                                m_Buffer,
+                                startPosition,
+                                m_Position - startPosition ),
+                        } );
+                    return;
             }
         }
     }
@@ -299,6 +380,15 @@ internal class Lexer
         return m_Position + 1 == m_Buffer.Length
             ? null
             : m_Buffer[ ++m_Position ];
+    }
+
+    /// Sets the current position back one byte, so it can be parsed again.
+    private void UneatByte( )
+    {
+        if ( m_Position > 0 )
+        {
+            --m_Position;
+        }
     }
 
     /// Returns the last read byte. The caller is responsible for ensuring that `m_Position` is in

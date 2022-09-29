@@ -8,17 +8,19 @@ internal enum ETokenKind
     EndOfFile,
     EndOfLine,
     NullCharacter,
-
     Identifier,
-
-    // Keywords
-    Syntax,
 
     // Literals
     StringLiteral,
+    IntLiteral,
+    FloatLiteral,
 
     // Punctuation
     Equals,
     Semicolon,
     Quote,
+    LeftBrace,
+    RightBrace,
+    LeftParen,
+    RightParen,
 }
