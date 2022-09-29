@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// Source: https://github.com/grpc/grpc/blob/bdc799af733a2f2c9e85304b705772dd0287f377/examples/protos/helloworld.proto
 
 syntax = "proto3";
 
