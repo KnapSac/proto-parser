@@ -1,6 +1,6 @@
 ﻿#region
 
-using ProtoParser.Parsing.Tokens;
+using ProtoParser.Syntax;
 
 #endregion
 
@@ -10,13 +10,5 @@ internal interface IDiagnosticsProvider
 {
     void EmitError(
         string message,
-        Token ? token = null );
-
-    void EmitError(
-        string message,
-        int line = 0,
-        int column = 0 );
-
-    bool EmitDiagnosticIfMissingToken(
-        Token token );
+        SyntaxToken token );
 }

@@ -1,6 +1,6 @@
 ﻿#region
 
-using ProtoParser.Parsing.Tokens;
+using ProtoParser.Syntax;
 
 #endregion
 
@@ -18,36 +18,9 @@ internal class ConsoleDiagnosticsProvider : IDiagnosticsProvider
 
     void IDiagnosticsProvider.EmitError(
         string message,
-        Token ? token )
+        SyntaxToken token )
     {
-        if ( token is not null )
-        {
-            ((IDiagnosticsProvider) this).EmitError(
-                message,
-                token.Line,
-                token.Column );
-            return;
-        }
-
-        Console.Error.WriteLine( $"error: {message}" );
-    }
-
-    void IDiagnosticsProvider.EmitError(
-        string message,
-        int line,
-        int column )
-    {
-        Console.Error.WriteLine( $"{m_Path}({line},{column}): error: {message}" );
-    }
-
-    bool IDiagnosticsProvider.EmitDiagnosticIfMissingToken(
-        Token token )
-    {
-        if ( token is not MissingToken missingToken )
-        {
-            return false;
-        }
-
-        throw new NotImplementedException( );
+        // TODO: Include span info of token in output
+        Console.Error.WriteLine( $"{m_Path}(?,?): error: {message}" );
     }
 }

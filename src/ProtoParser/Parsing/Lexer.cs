@@ -4,6 +4,7 @@ using System.Text;
 
 using ProtoParser.Diagnostics;
 using ProtoParser.Parsing.Tokens;
+using ProtoParser.Syntax;
 
 #endregion
 
@@ -26,6 +27,12 @@ internal class Lexer
     private int m_Line;
     private int m_LastLineWithToken;
 
+    private IList< SyntaxTrivia > m_LeadingTrivia;
+    private IList< SyntaxTrivia > m_TrailingTrivia;
+    private IList< SyntaxTrivia > m_CurrentTrivia;
+
+    internal SyntaxToken Current { get; private set; }
+
     internal Lexer(
         byte[ ] buffer,
         IDiagnosticsProvider diagnosticsProvider )
@@ -40,7 +47,8 @@ internal class Lexer
         m_LastLineWithToken = 0;
     }
 
-    internal IList< Token > Lex( )
+    /// Discards the byte order mark, if it was present.
+    internal void DiscardOptionalByteOrderMark( )
     {
         // Consume the byte order mark if it is present.
         if ( Peek(
@@ -50,8 +58,184 @@ internal class Lexer
         {
             Discard( ByteOrderMark.Length );
         }
+    }
 
-        while ( !m_EndOfFile )
+    internal SyntaxToken Lex( )
+    {
+        LexTrivia( false );
+
+        while ( true )
+        {
+            byte ? next = Peek( );
+            if ( next is null )
+            {
+                // We have reached the end of the file.
+                EatEndOfFile( );
+                return Current;
+            }
+
+            EatByte( );
+            switch ( next )
+            {
+                case (byte) ' ':
+                case (byte) '\n':
+                case (byte) '\r':
+                case (byte) '\t':
+                case (byte) '\f':
+                case (byte) '\v':
+                case (byte) '\\':
+                {
+                    // Trailing trivia.
+                    LexTrivia( true );
+                    return Current;
+                }
+            }
+        }
+    }
+
+    private void LexTrivia(
+        bool trailing )
+    {
+        if ( trailing )
+        {
+            m_TrailingTrivia = new List< SyntaxTrivia >( );
+            m_CurrentTrivia = m_TrailingTrivia;
+        }
+        else
+        {
+            m_LeadingTrivia = new List< SyntaxTrivia >( );
+            m_CurrentTrivia = m_LeadingTrivia;
+        }
+
+        while ( true )
+        {
+            byte ? next = Peek( );
+            if ( next is null )
+            {
+                // We have reached the end of the file.
+                EatEndOfFile( );
+                return;
+            }
+
+            switch ( next )
+            {
+                // Whitespace.
+                case (byte) '\n':
+                {
+                    // We have encountered a newline, so we need to update our state.
+                    EatByte( );
+                    EatNewline( );
+
+                    if ( trailing )
+                    {
+                        // Trailing trivia runs till the end of the line.
+                        return;
+                    }
+
+                    break;
+                }
+                case (byte) ' ' or (byte) '\r' or (byte) '\t' or (byte) '\f' or (byte) '\v':
+                {
+                    // Whitespace.
+                    EatByte( );
+                    EatWhitespace( );
+                    break;
+                }
+
+                // Comments.
+                case (byte) '\\':
+                {
+                    // Line or block comment.
+                    EatByte( );
+
+                    switch ( Peek( ) )
+                    {
+                        case (byte) '/':
+                        {
+                            // Line comment.
+                            EatLineComment( );
+                            break;
+                        }
+                        case (byte) '*':
+                        {
+                            // Block comment.
+                            EatBlockComment( );
+                            break;
+                        }
+                        default:
+                            throw new ArgumentException(
+                                $"Unexpected byte '{(char) CurrentByte( )}'" );
+                    }
+                    break;
+                }
+
+                default:
+                    EatEndOfFile( );
+                    return;
+            }
+        }
+    }
+
+    /// Adds end of file trivia to the current trailing trivia, and sets `m_EndOfFile` to true.
+    private void EatEndOfFile( )
+    {
+        m_EndOfFile = true;
+        m_CurrentTrivia.Add( SyntaxTokenFactory.EndOfFileTrivia );
+        Current = new SyntaxToken
+                  {
+                      Kind = ESyntaxKind.EndOfFile,
+                  };
+        Current.WithTrivia(
+            m_LeadingTrivia,
+            m_TrailingTrivia );
+    }
+
+    /// Adds newline trivia to the current trailing trivia, and updates the line index.
+    private void EatNewline( )
+    {
+        m_CurrentTrivia.Add( SyntaxTokenFactory.EndOfLineTrivia );
+        ++m_Line;
+    }
+
+    private void EatWhitespace( )
+    {
+        int startPosition = m_Position;
+        while ( true )
+        {
+            byte ? next = Peek( );
+            switch ( next )
+            {
+                case null:
+                    EatEndOfFile( );
+                    return;
+                case (byte) ' ' or (byte) '\r' or (byte) '\t' or (byte) '\f' or (byte) '\v':
+                    EatByte( );
+                    continue;
+            }
+
+            break;
+        }
+
+        if ( m_Position - startPosition == 1
+             && CurrentByte( ) == (byte) ' ' )
+        {
+            m_CurrentTrivia.Add( SyntaxTokenFactory.Space );
+            return;
+        }
+
+        m_CurrentTrivia.Add(
+            new SyntaxTrivia
+            {
+                Kind = ESyntaxKind.Whitespace,
+                Text = Encoding.UTF8.GetString(
+                    m_Buffer,
+                    startPosition,
+                    m_Position - startPosition ),
+            } );
+    }
+
+    /*
+    while ( !m_EndOfFile )
         {
             switch ( EatByte( ) )
             {
@@ -321,23 +505,21 @@ internal class Lexer
             }
         }
     }
+    */
 
-    /// Consumes a line comment without consuming any whitespace before or after it. The newline
-    /// after the comment is consumed.
+    /// Consumes a line comment without consuming any whitespace before it. The newline after the
+    /// comment is *not* consumed.
     private void EatLineComment( )
     {
         // PRE: The leading slashes have been consumed.
         while ( true )
         {
-            switch ( EatByte( ) )
+            byte ? next = Peek( );
+            switch ( next )
             {
                 case (byte) '\x00':
                 {
-                    EmitToken(
-                        new InvalidToken
-                        {
-                            TokenKind = ETokenKind.NullCharacter,
-                        } );
+                    // TODO: Add invalid token trivia.
 
                     // Although null characters aren't allowed in comments, we continue consuming
                     // characters until we reach the end of the line, to ensure we can parse the
@@ -352,86 +534,19 @@ internal class Lexer
                 }
                 case (byte) '\n':
                 {
-                    // We have consumed a newline, so update our position before returning.
-                    UpdatePositionAfterNewline( );
+                    // We have reached the end of the line comment, the caller is responsible for
+                    // consuming the newline.
                     return;
                 }
             }
+
+            EatByte( );
         }
     }
 
     private void EatBlockComment( )
     {
         throw new NotImplementedException( );
-    }
-
-    private void EatEndOfFile( )
-    {
-        EmitToken(
-            new SymbolToken
-            {
-                TokenKind = ETokenKind.EndOfFile,
-            } );
-        m_EndOfFile = true;
-    }
-
-    private byte ? EatByte( )
-    {
-        return m_Position + 1 == m_Buffer.Length
-            ? null
-            : m_Buffer[ ++m_Position ];
-    }
-
-    /// Sets the current position back one byte, so it can be parsed again.
-    private void UneatByte( )
-    {
-        if ( m_Position > 0 )
-        {
-            --m_Position;
-        }
-    }
-
-    /// Returns the last read byte. The caller is responsible for ensuring that `m_Position` is in
-    /// bounds.
-    private byte Current( )
-    {
-        return m_Buffer[ m_Position ];
-    }
-
-    private byte ? Previous( )
-    {
-        return m_Position <= 0
-            ? null
-            : m_Buffer[ m_Position - 1 ];
-    }
-
-    private void EmitToken(
-        Token tokenToEmit )
-    {
-        m_TokenBuffer.Add( tokenToEmit );
-        m_LastLineWithToken = m_Line;
-    }
-
-    /// Consumes a newline.
-    private void EatNewline( )
-    {
-        if ( m_LastLineWithToken == m_Line )
-        {
-            EmitToken(
-                new SymbolToken
-                {
-                    TokenKind = ETokenKind.EndOfLine,
-                } );
-        }
-
-        UpdatePositionAfterNewline( );
-    }
-
-    /// Updates the relevant state after consuming a newline.
-    private void UpdatePositionAfterNewline( )
-    {
-        // Update the line index and the starting position of the line.
-        ++m_Line;
     }
 
     /// Peeks `bytesToPeek` ahead. If the return value is `true`, `bytes` contains the next
@@ -459,5 +574,25 @@ internal class Lexer
         int bytesToDiscard )
     {
         m_Position += bytesToDiscard;
+    }
+
+    /// Returns the next byte to be read, or `null` if the end of the file has been reached.
+    private byte ? Peek( )
+    {
+        return m_Position + 1 >= m_Buffer.Length
+            ? null
+            : m_Buffer[ m_Position + 1 ];
+    }
+
+    /// Returns the next byte, the caller is responsible for ensuring that the read is in bounds!
+    private byte EatByte( )
+    {
+        return m_Buffer[ ++m_Position ];
+    }
+
+    /// Returns the last read byte.
+    private byte CurrentByte( )
+    {
+        return m_Buffer[ m_Position ];
     }
 }

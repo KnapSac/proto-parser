@@ -2,6 +2,7 @@
 
 using System.Diagnostics;
 
+using ProtoParser.Ast;
 using ProtoParser.Parsing;
 
 #endregion
@@ -22,7 +23,7 @@ if ( !File.Exists( path ) )
 Console.WriteLine( $"Parsing '{path}'" );
 
 Stopwatch watch = Stopwatch.StartNew( );
-Parser.Parse(
+FileNode fileNode = Parser.Parse(
     File.ReadAllBytes( path ),
     path );
 watch.Stop( );
