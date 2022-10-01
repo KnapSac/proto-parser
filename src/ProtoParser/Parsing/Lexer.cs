@@ -60,6 +60,12 @@ internal class Lexer
         }
     }
 
+    /// Returns `true` if the lexer is currently at the end of a line.
+    internal bool AtEndOfLine( )
+    {
+        return CurrentByte( ) == (byte) '\n';
+    }
+
     internal SyntaxToken Lex( )
     {
         LexTrivia( false );
@@ -74,9 +80,9 @@ internal class Lexer
                 return Current;
             }
 
-            EatByte( );
             switch ( next )
             {
+                // Trailing trivia.
                 case (byte) ' ':
                 case (byte) '\n':
                 case (byte) '\r':
@@ -85,10 +91,58 @@ internal class Lexer
                 case (byte) '\v':
                 case (byte) '\\':
                 {
-                    // Trailing trivia.
                     LexTrivia( true );
                     return Current;
                 }
+
+                // Identifier.
+                case { } b when b == (byte) '_' || char.IsAsciiLetter( (char) b ):
+                {
+                    // Identifier.
+                    return EatIdentifier( ).WithTrivia(
+                        m_LeadingTrivia,
+                        m_TrailingTrivia );
+                }
+
+                // Literals.
+                case (byte) '"' or (byte) '\'':
+                {
+                    // String literal.
+                    SyntaxToken stringLiteral = EatStringLiteral( );
+                    LexTrivia( true );
+                    return stringLiteral.WithTrivia(
+                        m_LeadingTrivia,
+                        m_TrailingTrivia );
+                }
+
+                // Punctuation.
+                case (byte) '=':
+                {
+                    // Equals.
+                    EatByte( );
+                    LexTrivia( true );
+                    return new SyntaxToken
+                           {
+                               Kind = ESyntaxKind.Equals,
+                           }.WithTrivia(
+                        m_LeadingTrivia,
+                        m_TrailingTrivia );
+                }
+                case (byte) ';':
+                {
+                    // Semicolon.
+                    EatByte( );
+                    LexTrivia( true );
+                    return new SyntaxToken
+                           {
+                               Kind = ESyntaxKind.Semicolon,
+                           }.WithTrivia(
+                        m_LeadingTrivia,
+                        m_TrailingTrivia );
+                }
+
+                default:
+                    throw new ArgumentException( $"Unexpected byte '{(char) next}'" );
             }
         }
     }
@@ -137,7 +191,6 @@ internal class Lexer
                 case (byte) ' ' or (byte) '\r' or (byte) '\t' or (byte) '\f' or (byte) '\v':
                 {
                     // Whitespace.
-                    EatByte( );
                     EatWhitespace( );
                     break;
                 }
@@ -175,6 +228,95 @@ internal class Lexer
                     // No more trivia to lex.
                     return;
             }
+        }
+    }
+
+    private SyntaxToken EatIdentifier( )
+    {
+        EatByte( );
+        int startPosition = m_Position;
+
+        while ( true )
+        {
+            byte ? current = Peek( );
+            if ( current is null )
+            {
+                EatEndOfFile( );
+                return Current;
+            }
+
+            if ( current == (byte) '_'
+                 || char.IsAsciiLetter( (char) current )
+                 || char.IsAsciiDigit( (char) current ) )
+            {
+                // Valid identifier character, continue.
+                EatByte( );
+                continue;
+            }
+
+            // We have reached the end of the identifier.
+            string identifier = Encoding.UTF8.GetString(
+                m_Buffer,
+                startPosition,
+                m_Position - startPosition + 1 );
+            ESyntaxKind kind = identifier switch
+            {
+                Keywords.Syntax => ESyntaxKind.Syntax,
+                _ => ESyntaxKind.Identifier,
+            };
+
+            IdentifierToken identifierToken = new( )
+                                              {
+                                                  Kind = kind,
+                                                  Text = identifier,
+                                              };
+
+            LexTrivia( true );
+
+            return identifierToken;
+        }
+    }
+
+    private SyntaxToken EatStringLiteral( )
+    {
+        byte readUntil = EatByte( );
+        int startPosition = m_Position;
+
+        while ( true )
+        {
+            byte ? next = Peek( );
+            if ( next is null )
+            {
+                EatEndOfFile( );
+                return Current;
+            }
+
+            if ( next == readUntil
+                 && CurrentByte( ) != (byte) '\\' )
+            {
+                // We have reached the end of the string literal.
+                EatByte( );
+                return new StringLiteralToken
+                       {
+                           Kind = ESyntaxKind.StringLiteral,
+                           Text = Encoding.UTF8.GetString(
+                               m_Buffer,
+                               startPosition,
+                               m_Position - startPosition + 1 ),
+                       };
+            }
+
+            switch ( next )
+            {
+                case (byte) '\0':
+                    // TODO: Add invalid token trivia.
+                    break;
+                case (byte) '\n' when CurrentByte( ) != (byte) '\\':
+                    // TODO: Add invalid token trivia.
+                    break;
+            }
+
+            EatByte( );
         }
     }
 
@@ -521,7 +663,7 @@ internal class Lexer
             byte ? next = Peek( );
             switch ( next )
             {
-                case (byte) '\x00':
+                case (byte) '\0':
                 {
                     // TODO: Add invalid token trivia.
 

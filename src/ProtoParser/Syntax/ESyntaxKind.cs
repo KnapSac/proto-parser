@@ -79,3 +79,8 @@ public enum ESyntaxKind : byte
     Whitespace = 66,
     Skipped = 67,
 }
+
+internal static class Keywords
+{
+    internal const string Syntax = "syntax";
+}

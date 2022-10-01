@@ -17,8 +17,8 @@ public enum ESyntaxLevel : byte
 /// Represents a syntax declaration. Default `SyntaxLevel` is 2.
 public class SyntaxDeclarationSyntax : SyntaxNode
 {
-    private const string PROTO_2 = "proto2";
-    private const string PROTO_3 = "proto3";
+    private const string PROTO_2 = "\"proto2\"";
+    private const string PROTO_3 = "\"proto3\"";
 
     /// The syntax level declared. Default `SyntaxLevel` is 2, if parsing failed to parse the syntax
     /// level, `SyntaxLevel` is `Missing`.

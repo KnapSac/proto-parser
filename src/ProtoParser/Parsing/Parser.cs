@@ -51,6 +51,7 @@ public class Parser
                 return fileNode;
             }
 
+            // TODO: Ensure that syntax is the first token in the file, if present.
             if ( token.Kind == ESyntaxKind.Syntax )
             {
                 if ( !isInitialSyntaxToken )
@@ -143,7 +144,6 @@ public class Parser
         {
             // Save the semicolon token.
             syntaxDeclarationTokens.Add( nextToken );
-            nextToken = m_Lexer.Lex( );
         }
         else
         {
@@ -165,18 +165,13 @@ public class Parser
                 nextToken );
         }
 
-        if ( nextToken.Kind == ESyntaxKind.EndOfLine )
+        // Skip tokens until we reach the end of the line.
+        if ( !m_Lexer.AtEndOfLine( ) )
         {
-            // Save the end of line token.
-            syntaxDeclarationTokens.Add( nextToken );
-            return new SyntaxDeclarationSyntax(
-                syntaxDeclarationTokens,
-                syntaxLevelToken );
+            syntaxDeclarationTokens.Add( SkipUntilEndOfLine( nextToken ) );
+            syntaxDeclarationTokens.Add( m_Lexer.Current );
         }
 
-        // Skip tokens until we reach the end of the line.
-        syntaxDeclarationTokens.Add( SkipUntilEndOfLine( nextToken ) );
-        syntaxDeclarationTokens.Add( m_Lexer.Current );
         return new SyntaxDeclarationSyntax(
             syntaxDeclarationTokens,
             syntaxLevelToken );

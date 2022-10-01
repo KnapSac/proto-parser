@@ -10,12 +10,14 @@ public class SyntaxToken
     public required ESyntaxKind Kind { get; init; }
     public string Text { get; init; }
 
-    internal void WithTrivia(
+    internal SyntaxToken WithTrivia(
         IList< SyntaxTrivia > leadingTrivia,
         IList< SyntaxTrivia > trailingTrivia )
     {
         m_LeadingTrivia = leadingTrivia;
         m_TrailingTrivia = trailingTrivia;
+
+        return this;
     }
 }
 
