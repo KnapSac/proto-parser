@@ -143,7 +143,7 @@ internal class Lexer
                 }
 
                 // Comments.
-                case (byte) '\\':
+                case (byte) '/':
                 {
                     // Line or block comment.
                     EatByte( );
@@ -153,12 +153,14 @@ internal class Lexer
                         case (byte) '/':
                         {
                             // Line comment.
+                            EatByte( );
                             EatLineComment( );
                             break;
                         }
                         case (byte) '*':
                         {
                             // Block comment.
+                            EatByte( );
                             EatBlockComment( );
                             break;
                         }
@@ -170,7 +172,7 @@ internal class Lexer
                 }
 
                 default:
-                    EatEndOfFile( );
+                    // No more trivia to lex.
                     return;
             }
         }
@@ -512,6 +514,8 @@ internal class Lexer
     private void EatLineComment( )
     {
         // PRE: The leading slashes have been consumed.
+        int startPosition = m_Position - 1;
+
         while ( true )
         {
             byte ? next = Peek( );
@@ -536,6 +540,15 @@ internal class Lexer
                 {
                     // We have reached the end of the line comment, the caller is responsible for
                     // consuming the newline.
+                    m_CurrentTrivia.Add(
+                        new SyntaxTrivia
+                        {
+                            Kind = ESyntaxKind.LineComment,
+                            Text = Encoding.UTF8.GetString(
+                                m_Buffer,
+                                startPosition,
+                                m_Position - startPosition + 1 ),
+                        } );
                     return;
                 }
             }
