@@ -83,4 +83,5 @@ public enum ESyntaxKind : byte
 internal static class Keywords
 {
     internal const string Syntax = "syntax";
+    internal const string Package = "package";
 }

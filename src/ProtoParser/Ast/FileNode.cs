@@ -11,6 +11,7 @@ namespace ProtoParser.Ast;
 public sealed class FileNode
 {
     public SyntaxDeclarationSyntax ? SyntaxDeclaration { get; internal set; }
+    public PackageDeclarationSyntax ? PackageDeclaration { get; internal set; }
 
     public ESyntaxLevel SyntaxLevel => SyntaxDeclaration?.SyntaxLevel ?? ESyntaxLevel.Proto2;
 

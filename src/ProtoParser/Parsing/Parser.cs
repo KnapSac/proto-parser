@@ -40,6 +40,7 @@ public class Parser
         m_Lexer.DiscardOptionalByteOrderMark( );
 
         bool isInitialSyntaxToken = true;
+        bool isInitialPackageToken = true;
         FileNode fileNode = new( );
         while ( !m_EndOfFile )
         {
@@ -51,20 +52,37 @@ public class Parser
                 return fileNode;
             }
 
-            // TODO: Ensure that syntax is the first token in the file, if present.
-            if ( token.Kind == ESyntaxKind.Syntax )
+            switch ( token.Kind )
             {
-                if ( !isInitialSyntaxToken )
+                case ESyntaxKind.Syntax:
                 {
-                    m_DiagnosticsProvider.EmitError(
-                        $"Multiple syntax declarations not allowed, originally declared at {fileNode.SyntaxDeclaration!}.",
-                        token );
+                    // TODO: Ensure that syntax is the first token in the file, if present.
+                    if ( !isInitialSyntaxToken )
+                    {
+                        m_DiagnosticsProvider.EmitError(
+                            $"Multiple syntax declarations not allowed, originally declared at {fileNode.SyntaxDeclaration!}.",
+                            token );
+                        continue;
+                    }
+
+                    isInitialSyntaxToken = false;
+                    fileNode.SyntaxDeclaration = ParseSyntaxDeclaration( token );
                     continue;
                 }
+                case ESyntaxKind.Package:
+                {
+                    if ( !isInitialPackageToken )
+                    {
+                        m_DiagnosticsProvider.EmitError(
+                            $"Multiple package declarations not allowed, originally declared at {fileNode.PackageDeclaration!}.",
+                            token );
+                        continue;
+                    }
 
-                isInitialSyntaxToken = false;
-                fileNode.SyntaxDeclaration = ParseSyntaxDeclaration( token );
-                continue;
+                    isInitialPackageToken = false;
+                    fileNode.PackageDeclaration = ParsePackageDeclaration( token );
+                    continue;
+                }
             }
         }
 
@@ -175,6 +193,113 @@ public class Parser
         return new SyntaxDeclarationSyntax(
             syntaxDeclarationTokens,
             syntaxLevelToken );
+    }
+
+    /// GRAMMAR:
+    /// PackageDecl = package PackageName semicolon .
+    /// PackageName = QualifiedIdentifier .
+    /// QualifiedIdentifier = identifier { dot identifier } .
+    private PackageDeclarationSyntax ParsePackageDeclaration(
+        SyntaxToken packageKeywordToken )
+    {
+        // NOTE: Init list with capacity 3, because we expect at least 3 tokens, although there
+        // might be more because the grammar allows C-style concatenation.
+        IList< SyntaxToken > packageDeclarationTokens = new List< SyntaxToken >( 3 )
+                                                        {
+                                                            packageKeywordToken,
+                                                        };
+        SyntaxToken nextToken = m_Lexer.Lex( );
+        if ( !ParseIdentifier( ) )
+        {
+            return new PackageDeclarationSyntax( packageDeclarationTokens );
+        }
+
+        bool identifierFinished = false;
+        while ( !identifierFinished )
+        {
+            switch ( nextToken.Kind )
+            {
+                case ESyntaxKind.Semicolon:
+                {
+                    // Save the semicolon token.
+                    packageDeclarationTokens.Add( nextToken );
+                    identifierFinished = true;
+                    break;
+                }
+                case ESyntaxKind.Dot:
+                {
+                    // Save the dot token.
+                    packageDeclarationTokens.Add( nextToken );
+                    nextToken = m_Lexer.Lex( );
+                    if ( !ParseIdentifier( ) )
+                    {
+                        return new PackageDeclarationSyntax( packageDeclarationTokens );
+                    }
+                    break;
+                }
+                default:
+                {
+                    if ( HandlePossibleEndOfFile(
+                        nextToken,
+                        packageDeclarationTokens ) )
+                    {
+                        return new PackageDeclarationSyntax( packageDeclarationTokens );
+                    }
+
+                    // Create a missing token.
+                    packageDeclarationTokens.Add(
+                        new MissingToken
+                        {
+                            Kind = ESyntaxKind.Semicolon,
+                        } );
+                    m_DiagnosticsProvider.EmitError(
+                        "Missing semicolon after package declaration.",
+                        nextToken );
+                    identifierFinished = true;
+                    break;
+                }
+            }
+        }
+
+        // Skip tokens until we reach the end of the line.
+        if ( !m_Lexer.AtEndOfLine( ) )
+        {
+            packageDeclarationTokens.Add( SkipUntilEndOfLine( nextToken ) );
+            packageDeclarationTokens.Add( m_Lexer.Current );
+        }
+
+        return new PackageDeclarationSyntax( packageDeclarationTokens );
+
+        bool ParseIdentifier( )
+        {
+            if ( nextToken.Kind == ESyntaxKind.Identifier )
+            {
+                // Save the identifier token.
+                packageDeclarationTokens.Add( nextToken );
+                nextToken = m_Lexer.Lex( );
+            }
+            else
+            {
+                if ( HandlePossibleEndOfFile(
+                    nextToken,
+                    packageDeclarationTokens ) )
+                {
+                    return false;
+                }
+
+                // Create a missing token.
+                packageDeclarationTokens.Add(
+                    new MissingToken
+                    {
+                        Kind = ESyntaxKind.Identifier,
+                    } );
+                m_DiagnosticsProvider.EmitError(
+                    "Missing identifier in package declaration.",
+                    nextToken );
+            }
+
+            return true;
+        }
     }
 
     /// Skips tokens until either an end of line or end of file token. The skipped tokens are stored

@@ -3,7 +3,6 @@
 using System.Text;
 
 using ProtoParser.Diagnostics;
-using ProtoParser.Parsing.Tokens;
 using ProtoParser.Syntax;
 
 #endregion
@@ -15,7 +14,6 @@ internal class Lexer
     private static ReadOnlySpan< byte > ByteOrderMark => "\xEF\xBB\xBF"u8;
 
     private readonly byte[ ] m_Buffer;
-    private readonly IList< Token > m_TokenBuffer;
     private readonly IDiagnosticsProvider m_DiagnosticsProvider;
 
     /// The position of the last read byte, or `-1` if no bytes have been read yet.
@@ -38,8 +36,6 @@ internal class Lexer
         IDiagnosticsProvider diagnosticsProvider )
     {
         m_Buffer = buffer;
-        // TODO: Be smarter about the initial token buffer size.
-        m_TokenBuffer = new List< Token >( 512 );
         m_DiagnosticsProvider = diagnosticsProvider;
 
         m_Position = -1;
@@ -262,6 +258,7 @@ internal class Lexer
             ESyntaxKind kind = identifier switch
             {
                 Keywords.Syntax => ESyntaxKind.Syntax,
+                Keywords.Package => ESyntaxKind.Package,
                 _ => ESyntaxKind.Identifier,
             };
 
