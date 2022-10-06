@@ -60,6 +60,14 @@ public class Parser
                     syntaxTree.AddChild( ParsePackageDeclaration( token ) );
                     continue;
                 }
+                case ESyntaxKind.Service:
+                {
+                    syntaxTree.AddChild(
+                        ParseServiceDeclaration(
+                            syntaxTree,
+                            token ) );
+                    continue;
+                }
             }
         }
 
@@ -282,6 +290,121 @@ public class Parser
 
             return true;
         }
+    }
+
+    /// GRAMMAR:
+    /// ServiceDecl = service ServiceName l_brace { ServiceElement } r_brace .
+    /// ServiceName = identifier.
+    /// ServiceElement = OptionDecl |
+    ///                  MethodDecl |
+    ///                  EmptyDecl.
+    private SyntaxNode ParseServiceDeclaration(
+        SyntaxTree syntaxTree,
+        SyntaxToken serviceKeywordToken )
+    {
+        // NOTE: Init list with capacity 4, because we expect at least 4 tokens, although there
+        // might be more because the grammar allows C-style concatenation.
+        IList< SyntaxToken > serviceDeclarationTokens = new List< SyntaxToken >( 4 )
+                                                        {
+                                                            serviceKeywordToken,
+                                                        };
+        SyntaxToken ? syntaxLevelToken = null;
+
+        SyntaxToken nextToken = m_Lexer.Lex( );
+        if ( nextToken.Kind == ESyntaxKind.Identifier )
+        {
+            // Save the identifier token.
+            serviceDeclarationTokens.Add( nextToken );
+            nextToken = m_Lexer.Lex( );
+        }
+        else
+        {
+            if ( HandlePossibleEndOfFile(
+                nextToken,
+                serviceDeclarationTokens ) )
+            {
+                return new ServiceDeclarationSyntax( serviceDeclarationTokens );
+            }
+
+            // Create a missing token.
+            serviceDeclarationTokens.Add(
+                new MissingToken
+                {
+                    Kind = ESyntaxKind.Identifier,
+                    Text = string.Empty,
+                } );
+            m_DiagnosticsProvider.EmitError(
+                "Missing identifier after 'service'.",
+                nextToken );
+        }
+
+        if ( nextToken.Kind == ESyntaxKind.LeftBrace )
+        {
+            // Save the left brace token.
+            serviceDeclarationTokens.Add( nextToken );
+        }
+        else
+        {
+            if ( HandlePossibleEndOfFile(
+                nextToken,
+                serviceDeclarationTokens ) )
+            {
+                return new SyntaxDeclarationSyntax( serviceDeclarationTokens );
+            }
+
+            // Create a missing token.
+            serviceDeclarationTokens.Add(
+                new MissingToken
+                {
+                    Kind = ESyntaxKind.LeftBrace,
+                    Text = string.Empty,
+                } );
+            m_DiagnosticsProvider.EmitError(
+                "Missing left brace in service declaration.",
+                nextToken );
+        }
+
+        // TODO: Handle rpc declarations.
+        if ( nextToken.Kind == ESyntaxKind.Rpc )
+        {
+        }
+
+        if ( nextToken.Kind == ESyntaxKind.RightBrace )
+        {
+            // Save the right brace token.
+            serviceDeclarationTokens.Add( nextToken );
+        }
+        else
+        {
+            if ( HandlePossibleEndOfFile(
+                nextToken,
+                serviceDeclarationTokens ) )
+            {
+                return new SyntaxDeclarationSyntax( serviceDeclarationTokens );
+            }
+
+            // Create a missing token.
+            serviceDeclarationTokens.Add(
+                new MissingToken
+                {
+                    Kind = ESyntaxKind.RightBrace,
+                    Text = string.Empty,
+                } );
+            m_DiagnosticsProvider.EmitError(
+                "Missing right brace in service declaration.",
+                nextToken );
+        }
+
+        // Skip tokens until we reach the end of the line.
+        if ( !m_Lexer.AtEndOfLine( ) )
+        {
+            serviceDeclarationTokens.Add( SkipUntilEndOfLine( nextToken ) );
+            serviceDeclarationTokens.Add( m_Lexer.Current! );
+        }
+
+        return new SyntaxDeclarationSyntax(
+            serviceDeclarationTokens,
+            syntaxLevelToken );
     }
 
     /// Skips tokens until either an end of line or end of file token. The skipped tokens are stored

@@ -84,4 +84,7 @@ internal static class Keywords
 {
     internal const string Syntax = "syntax";
     internal const string Package = "package";
+    internal const string Service = "service";
+    internal const string Rpc = "rpc";
+    internal const string Returns = "returns";
 }

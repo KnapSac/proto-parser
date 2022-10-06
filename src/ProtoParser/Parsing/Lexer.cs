@@ -130,6 +130,58 @@ internal class Lexer
                         m_LeadingTrivia,
                         m_TrailingTrivia );
                 }
+                case (byte) '{':
+                {
+                    // Left brace.
+                    EatByte( );
+                    LexTrivia( true );
+                    return new SyntaxToken
+                           {
+                               Kind = ESyntaxKind.LeftBrace,
+                               Text = "{",
+                           }.WithTrivia(
+                        m_LeadingTrivia,
+                        m_TrailingTrivia );
+                }
+                case (byte) '}':
+                {
+                    // Right brace.
+                    EatByte( );
+                    LexTrivia( true );
+                    return new SyntaxToken
+                           {
+                               Kind = ESyntaxKind.RightBrace,
+                               Text = "}",
+                           }.WithTrivia(
+                        m_LeadingTrivia,
+                        m_TrailingTrivia );
+                }
+                case (byte) '(':
+                {
+                    // Left paren.
+                    EatByte( );
+                    LexTrivia( true );
+                    return new SyntaxToken
+                           {
+                               Kind = ESyntaxKind.LeftParen,
+                               Text = "(",
+                           }.WithTrivia(
+                        m_LeadingTrivia,
+                        m_TrailingTrivia );
+                }
+                case (byte) ')':
+                {
+                    // Right paren.
+                    EatByte( );
+                    LexTrivia( true );
+                    return new SyntaxToken
+                           {
+                               Kind = ESyntaxKind.RightParen,
+                               Text = ")",
+                           }.WithTrivia(
+                        m_LeadingTrivia,
+                        m_TrailingTrivia );
+                }
 
                 default:
                     throw new ArgumentException( $"Unexpected byte '{(char) next}'" );
@@ -253,6 +305,9 @@ internal class Lexer
             {
                 Keywords.Syntax => ESyntaxKind.Syntax,
                 Keywords.Package => ESyntaxKind.Package,
+                Keywords.Service => ESyntaxKind.Service,
+                Keywords.Rpc => ESyntaxKind.Rpc,
+                Keywords.Returns => ESyntaxKind.Returns,
                 _ => ESyntaxKind.Identifier,
             };
 
