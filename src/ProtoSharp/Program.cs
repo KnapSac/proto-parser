@@ -2,8 +2,8 @@
 
 using System.Diagnostics;
 
-using ProtoParser.Ast;
 using ProtoParser.Parsing;
+using ProtoParser.Syntax;
 
 #endregion
 
@@ -23,9 +23,12 @@ if ( !File.Exists( path ) )
 Console.WriteLine( $"Parsing '{path}'" );
 
 Stopwatch watch = Stopwatch.StartNew( );
-FileNode fileNode = Parser.Parse(
+SyntaxTree syntaxTree = Parser.Parse(
     File.ReadAllBytes( path ),
     path );
 watch.Stop( );
 
 Console.WriteLine( $"Parsing took {watch.ElapsedMilliseconds} ms" );
+
+Console.WriteLine( "Source:" );
+Console.WriteLine( syntaxTree.Source( ) );

@@ -1,6 +1,5 @@
 ﻿#region
 
-using ProtoParser.Ast;
 using ProtoParser.Diagnostics;
 using ProtoParser.Syntax;
 
@@ -25,7 +24,7 @@ public class Parser
             m_DiagnosticsProvider );
     }
 
-    public static FileNode Parse(
+    public static SyntaxTree Parse(
         byte[ ] buffer,
         string path )
     {
@@ -35,13 +34,11 @@ public class Parser
         return parser.Parse( );
     }
 
-    private FileNode Parse( )
+    private SyntaxTree Parse( )
     {
         m_Lexer.DiscardOptionalByteOrderMark( );
 
-        bool isInitialSyntaxToken = true;
-        bool isInitialPackageToken = true;
-        FileNode fileNode = new( );
+        SyntaxTree syntaxTree = new( );
         while ( !m_EndOfFile )
         {
             SyntaxToken token = m_Lexer.Lex( );
@@ -49,44 +46,25 @@ public class Parser
                 token,
                 null ) )
             {
-                return fileNode;
+                return syntaxTree;
             }
 
             switch ( token.Kind )
             {
                 case ESyntaxKind.Syntax:
                 {
-                    // TODO: Ensure that syntax is the first token in the file, if present.
-                    if ( !isInitialSyntaxToken )
-                    {
-                        m_DiagnosticsProvider.EmitError(
-                            $"Multiple syntax declarations not allowed, originally declared at {fileNode.SyntaxDeclaration!}.",
-                            token );
-                        continue;
-                    }
-
-                    isInitialSyntaxToken = false;
-                    fileNode.SyntaxDeclaration = ParseSyntaxDeclaration( token );
+                    syntaxTree.AddChild( ParseSyntaxDeclaration( token ) );
                     continue;
                 }
                 case ESyntaxKind.Package:
                 {
-                    if ( !isInitialPackageToken )
-                    {
-                        m_DiagnosticsProvider.EmitError(
-                            $"Multiple package declarations not allowed, originally declared at {fileNode.PackageDeclaration!}.",
-                            token );
-                        continue;
-                    }
-
-                    isInitialPackageToken = false;
-                    fileNode.PackageDeclaration = ParsePackageDeclaration( token );
+                    syntaxTree.AddChild( ParsePackageDeclaration( token ) );
                     continue;
                 }
             }
         }
 
-        return fileNode;
+        return syntaxTree;
     }
 
     /// GRAMMAR:
@@ -124,6 +102,7 @@ public class Parser
                 new MissingToken
                 {
                     Kind = ESyntaxKind.Equals,
+                    Text = string.Empty,
                 } );
             m_DiagnosticsProvider.EmitError(
                 "Missing '=' after 'syntax'.",
@@ -152,6 +131,7 @@ public class Parser
                 new MissingToken
                 {
                     Kind = ESyntaxKind.StringLiteral,
+                    Text = string.Empty,
                 } );
             m_DiagnosticsProvider.EmitError(
                 "Missing syntax level for syntax declaration.",
@@ -177,6 +157,7 @@ public class Parser
                 new MissingToken
                 {
                     Kind = ESyntaxKind.Semicolon,
+                    Text = string.Empty,
                 } );
             m_DiagnosticsProvider.EmitError(
                 "Missing semicolon after syntax declaration.",
@@ -251,6 +232,7 @@ public class Parser
                         new MissingToken
                         {
                             Kind = ESyntaxKind.Semicolon,
+                            Text = string.Empty,
                         } );
                     m_DiagnosticsProvider.EmitError(
                         "Missing semicolon after package declaration.",
@@ -292,6 +274,7 @@ public class Parser
                     new MissingToken
                     {
                         Kind = ESyntaxKind.Identifier,
+                        Text = string.Empty,
                     } );
                 m_DiagnosticsProvider.EmitError(
                     "Missing identifier in package declaration.",
@@ -322,11 +305,13 @@ public class Parser
                     return new SkippedTokens( skippedTokens )
                            {
                                Kind = ESyntaxKind.Skipped,
+                               Text = string.Empty,
                            };
                 case ESyntaxKind.EndOfFile:
                     return new SkippedTokens( skippedTokens )
                            {
                                Kind = ESyntaxKind.Skipped,
+                               Text = string.Empty,
                            };
                 default:
                     skippedTokens.Add( token );

@@ -120,6 +120,7 @@ internal class Lexer
                     return new SyntaxToken
                            {
                                Kind = ESyntaxKind.Equals,
+                               Text = "=",
                            }.WithTrivia(
                         m_LeadingTrivia,
                         m_TrailingTrivia );
@@ -132,6 +133,7 @@ internal class Lexer
                     return new SyntaxToken
                            {
                                Kind = ESyntaxKind.Semicolon,
+                               Text = ";",
                            }.WithTrivia(
                         m_LeadingTrivia,
                         m_TrailingTrivia );
@@ -325,6 +327,7 @@ internal class Lexer
         Current = new SyntaxToken
                   {
                       Kind = ESyntaxKind.EndOfFile,
+                      Text = string.Empty,
                   };
         Current.WithTrivia(
             m_LeadingTrivia,
