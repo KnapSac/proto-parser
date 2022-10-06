@@ -2,7 +2,6 @@
 
 using System.Text;
 
-using ProtoParser.Diagnostics;
 using ProtoParser.Syntax;
 
 #endregion
@@ -14,33 +13,26 @@ internal class Lexer
     private static ReadOnlySpan< byte > ByteOrderMark => "\xEF\xBB\xBF"u8;
 
     private readonly byte[ ] m_Buffer;
-    private readonly IDiagnosticsProvider m_DiagnosticsProvider;
 
     /// The position of the last read byte, or `-1` if no bytes have been read yet.
     private int m_Position;
-
-    /// `true` if the lexer has seen the end of the file.
-    private bool m_EndOfFile;
-
-    private int m_Line;
-    private int m_LastLineWithToken;
 
     private IList< SyntaxTrivia > m_LeadingTrivia;
     private IList< SyntaxTrivia > m_TrailingTrivia;
     private IList< SyntaxTrivia > m_CurrentTrivia;
 
-    internal SyntaxToken Current { get; private set; }
+    internal SyntaxToken ? Current { get; private set; }
 
     internal Lexer(
-        byte[ ] buffer,
-        IDiagnosticsProvider diagnosticsProvider )
+        byte[ ] buffer )
     {
         m_Buffer = buffer;
-        m_DiagnosticsProvider = diagnosticsProvider;
 
         m_Position = -1;
-        m_Line = 1;
-        m_LastLineWithToken = 0;
+
+        m_LeadingTrivia = new List< SyntaxTrivia >( );
+        m_TrailingTrivia = new List< SyntaxTrivia >( );
+        m_CurrentTrivia = m_LeadingTrivia;
     }
 
     /// Discards the byte order mark, if it was present.
@@ -73,7 +65,7 @@ internal class Lexer
             {
                 // We have reached the end of the file.
                 EatEndOfFile( );
-                return Current;
+                return Current!;
             }
 
             switch ( next )
@@ -88,7 +80,7 @@ internal class Lexer
                 case (byte) '\\':
                 {
                     LexTrivia( true );
-                    return Current;
+                    return Current!;
                 }
 
                 // Identifier.
@@ -240,7 +232,7 @@ internal class Lexer
             if ( current is null )
             {
                 EatEndOfFile( );
-                return Current;
+                return Current!;
             }
 
             if ( current == (byte) '_'
@@ -287,7 +279,7 @@ internal class Lexer
             if ( next is null )
             {
                 EatEndOfFile( );
-                return Current;
+                return Current!;
             }
 
             if ( next == readUntil
@@ -322,7 +314,6 @@ internal class Lexer
     /// Adds end of file trivia to the current trailing trivia, and sets `m_EndOfFile` to true.
     private void EatEndOfFile( )
     {
-        m_EndOfFile = true;
         m_CurrentTrivia.Add( SyntaxTokenFactory.EndOfFileTrivia );
         Current = new SyntaxToken
                   {
@@ -338,7 +329,6 @@ internal class Lexer
     private void EatNewline( )
     {
         m_CurrentTrivia.Add( SyntaxTokenFactory.EndOfLineTrivia );
-        ++m_Line;
     }
 
     private void EatWhitespace( )

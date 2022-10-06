@@ -20,8 +20,7 @@ public class Parser
     {
         m_DiagnosticsProvider = new ConsoleDiagnosticsProvider( path );
         m_Lexer = new Lexer(
-            buffer,
-            m_DiagnosticsProvider );
+            buffer );
     }
 
     public static SyntaxTree Parse(
@@ -168,7 +167,7 @@ public class Parser
         if ( !m_Lexer.AtEndOfLine( ) )
         {
             syntaxDeclarationTokens.Add( SkipUntilEndOfLine( nextToken ) );
-            syntaxDeclarationTokens.Add( m_Lexer.Current );
+            syntaxDeclarationTokens.Add( m_Lexer.Current! );
         }
 
         return new SyntaxDeclarationSyntax(
@@ -247,7 +246,7 @@ public class Parser
         if ( !m_Lexer.AtEndOfLine( ) )
         {
             packageDeclarationTokens.Add( SkipUntilEndOfLine( nextToken ) );
-            packageDeclarationTokens.Add( m_Lexer.Current );
+            packageDeclarationTokens.Add( m_Lexer.Current! );
         }
 
         return new PackageDeclarationSyntax( packageDeclarationTokens );
